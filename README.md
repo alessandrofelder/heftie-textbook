@@ -1,12 +1,12 @@
 # heftie-textbook
 
+<img src="book/images/heftie_logo.svg" alt="HEFTIE logo" width="100"/>
+
 A digital textbook for working with huge 3D imaging datasets
 
 > [!WARNING]
 > This book is still a work in progress - it might not make complete sense yet!
 > Feedback is very welcome, by [opening an issue](https://github.com/HEFTIEProject/heftie-textbook/issues/new) on our GitHub issue tracker.
-
-![HEFTIE logo](book/images/heftie_logo.svg)
 
 ## Contributors
 
