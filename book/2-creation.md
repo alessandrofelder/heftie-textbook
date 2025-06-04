@@ -44,7 +44,7 @@ plot_slice(heart_image, z_idx=70)
 While it is possible to easily save this data to the Zarr format using the zarr-python package in one line, we're going to take a slightly different and more manual approach. Our approach will avoid hiding the configuration of the Zarr data.
 This way we'll see what options are available to use when creating a Zarr array, and the process mirrors the one we'll use later in this chapter to create an OME-Zarr dataset.
 
-Using a library called pydantic-zarr, we can create an *array specification*.
+Using a library called pydantic-zarr, we can create an _array specification_.
 This is a model of how we want to configure the Zarr array.
 
 ```{code-cell} ipython3
@@ -61,6 +61,7 @@ print(array_spec)
 ```
 
 We've specified four different parameters:
+
 - `shape`: The shape of array we want to store.
 - `dtype`: The data type of the array we want to store.
 - `chunks`: The chunk shape of the Zarr array
@@ -76,7 +77,7 @@ And some parameters have been filled in automatically for us with default values
 - `dimension_separateor`: the character separating chunks in different dimensions when the data is saved
 
 Now we've specified the array configuration, we can convert this to an actual Zarr array.
-To do this we need to create a *store*.
+To do this we need to create a _store_.
 This represents where the Zarr array is stored - examples include in memory, on a local disk, or in some remote cloud storage.
 For a list of available stores see the [`zarr.storage` documentation](https://zarr.readthedocs.io/en/v2.18.5/api/storage.html).
 
@@ -90,7 +91,7 @@ zarr_array = array_spec.to_zarr(store=store, path="/")
 zarr_array
 ```
 
-The zarr array we've created acts in the same way as a normal NumPy array, so we can pass it to functions that work on NumPy arrays like our ``plot_slice`` function:
+The zarr array we've created acts in the same way as a normal NumPy array, so we can pass it to functions that work on NumPy arrays like our `plot_slice` function:
 
 ```{code-cell} ipython3
 plot_slice(zarr_array, z_idx=70)
@@ -118,8 +119,33 @@ To recap, there were three steps to creating an array:
 To change where the array is stored, we can change the store used, for example to save to a local directory on your computer:
 
 ```{code-cell} ipython3
-# TODO: use a temporary directory to save to a store
+from pathlib import Path
+import tempfile
+
+from data_helpers import get_directory_contents
+
+temp_dir = tempfile.TemporaryDirectory()
+temp_path = Path(temp_dir.name)
+print(f"Created temporary directory at {temp_path}")
+print(f"Directory contents before saving: {get_directory_contents(temp_path)}")
+
+store = zarr.DirectoryStore(temp_dir.name)
+zarr_array = array_spec.to_zarr(store=store, path="/")
+print(f"Directory contents after creating array: {get_directory_contents(temp_path)}")
+
+zarr_array[:] = heart_image[:]
+print(f"Directory contents after adding data: {get_directory_contents(temp_path)}")
+zarr_array
+
+temp_dir.cleanup()
 ```
+
+After saving the (empty) array, two files are created - '.zarray' and '.zattrs'.
+These store the Zarr array metdadata.
+After adding data to the array, four more folders appear - '0', '1', '2', '3'.
+These folders store the array data.
+
++++
 
 ## Creating OME-Zarr datasets
 
@@ -152,6 +178,7 @@ The first step is to create a new OME-Zarr Image:
 from ome_zarr_models.v04 import Image
 from ome_zarr_models.v04.axes import Axis
 
+voxel_size = 19.89
 ome_zarr_image = Image.new(
     array_specs = [ArraySpec.from_array(zarr_array)],
     paths = ["level0"],
@@ -160,7 +187,7 @@ ome_zarr_image = Image.new(
         Axis(name="y", type="space", unit="um"),
         Axis(name="z", type="space", unit="um")
     ],
-    global_scale = [19.89, 19.89, 19.89],
+    global_scale = [voxel_size, voxel_size, voxel_size],
     scales = [[1, 1, 1]],
     translations = [[0, 0, 0]],
     name = "heart_image"
@@ -201,8 +228,38 @@ Lets remind ourselves of the current datasets in our Image
 print(ome_zarr_image.attributes.multiscales[0].datasets[0])
 ```
 
-To add a new dataset, TODO: write when something like https://github.com/ome-zarr-models/ome-zarr-models-py/pull/196 is merged
+To create downsampled datasets, we'll start with the original array specification, and create identical array specifications with smaller shapes.
 
 ```{code-cell} ipython3
+import math
 
+full_res_spec = ArraySpec.from_array(zarr_array)
+print("Original array specification: ", full_res_spec)
+
+downsample_levels = [0, 1, 2]
+downsampled_specs = [
+    full_res_spec.model_copy(
+        update={"shape": tuple(math.ceil(i / 2**d) for i in full_res_spec.shape)
+    }) for d in downsample_levels
+]
+print("Downsampled array specifications: ", downsampled_specs)
+```
+
+With this new set of array specifications we can create a OME-Zarr image with multiple downsampled levels
+
+```{code-cell} ipython3
+ome_zarr_image = Image.new(
+    array_specs = downsampled_specs,
+    paths = [f"level{d}" for d in downsample_levels],
+    axes = [
+        Axis(name="x", type="space", unit="um"),
+        Axis(name="y", type="space", unit="um"),
+        Axis(name="z", type="space", unit="um")
+    ],
+    global_scale = [voxel_size, voxel_size, voxel_size],
+    scales = [[2**d, 2**d, 2**d] for d in downsample_levels],
+    translations = [[0, 0, 0] for d in downsample_levels],
+    name = "heart_image"
+)
+print(ome_zarr_image)
 ```
