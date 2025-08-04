@@ -363,7 +363,7 @@ for i in range(3):
     ax.set_aspect('equal')
     ax.set_title(f"Bin-by-{bin_factor}")
 
-fig.suptitle("OME-Zarr mutliscale image arrays")
+fig.suptitle("OME-Zarr multiscale image arrays")
 fig.tight_layout()
 ```
 
